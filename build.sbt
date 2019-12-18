@@ -2,4 +2,15 @@ name := "tasbih"
 
 version := "0.1"
 
-scalaVersion := "2.13.1"
+scalaVersion := "2.12.10"
+
+libraryDependencies += "dev.zio" %% "zio" % "1.0.0-RC17"
+
+//resolvers += "Sonatype Releases" at "https://oss.sonatype.org/content/repositories/releases/"
+//libraryDependencies += "org.scorexfoundation" %% "scrypto" % "2.1.6"
+
+val tsecV = "0.0.1-M11"
+libraryDependencies ++= Seq(
+  "io.github.jmcardon" %% "tsec-hash-jca" % tsecV,
+  "io.github.jmcardon" %% "tsec-hash-bouncy" % tsecV
+)
