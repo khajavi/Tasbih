@@ -1,62 +1,129 @@
 package com.speakfreely.tasbih
 
-import java.time.LocalDateTime
+import java.util.Date
 
-import zio.App
-import zio.console._
+import cats.effect.{ExitCode, Sync}
+import cats.implicits._
+import monix.eval.{Task, TaskApp}
+import tsec.common._
+import tsec.hashing.jca._
 
-object Main extends App {
+import scala.language.higherKinds
+import scala.util.{Failure, Success, Try}
 
-  val myAppLogic =
+object Main extends TaskApp {
+  override def run(args: List[String]): Task[ExitCode] = {
+    val b = BlockChain[Task]
     for {
-      _ <- putStrLn("Hello! What is your name?")
-      name <- getStrLn
-      _ <- putStrLn(s"Hello, ${name}, welcome to ZIO!")
-    } yield ()
-
-  def run(args: List[String]) =
-    myAppLogic.fold(_ => 1, _ => 0)
+      b1 <- b.addBlock("Hello")
+      b2 <- b1.addBlock("Block")
+      b3 <- b2.addBlock("Chain!")
+      _ <- Task(println(b3))
+    } yield ExitCode.Success
+  }
 }
 
+trait BaseBlockChain[F[_]] {
+  def addBlock(data: String): F[BlockChain[F]]
 
-object AB extends scala.App {
+  def addBlock(data: Block): F[Try[BlockChain[F]]]
 
-  import tsec.common._
-  import tsec.hashing._
-  import tsec.hashing.jca._
+  def firstBlock: Block
 
-  val a: CryptoHash[SHA256] = "hellssdasdsd".utf8Bytes.hash[SHA256]
-
-  println(a.foldLeft(List[Byte]())((x: List[Byte], y) => x.+:(y)).toArray.toUtf8String)
-
+  def latestBlock: Block
 }
 
 case class Block(index: Int,
-                 hash: String,
                  previousHash: String,
-                 timestamp: LocalDateTime,
-                 data: String) {
-
-  import cats.effect.IO
-  import tsec.common._
-  import tsec.hashing.jca._
-
-  private def hash(data: String) = {
-    for {
-      hash <- SHA256.hash[IO]("hiHello".utf8Bytes)
-    } yield hash.toHexString
-  }
-
-  def blockHash: IO[String] = {
-    hash(index + previousHash + timestamp + data)
-  }
-}
+                 timestamp: Long,
+                 data: String,
+                 hash: String
+                )
 
 object GenesisBlock extends Block(
   index = 0,
   previousHash = "0",
-  hash = "034854f03ec9f59c20cd06275f219fa5348e8da238624d98989a5ed174d46863",
-  timestamp = LocalDateTime.of(2019, 12, 18, 23, 22),
-  data = "Genesis Block"
+  timestamp = 1497359352,
+  data = "Genesis block",
+  hash = "ccce7d8349cf9f5d9a9c8f9293756f584d02dfdb953361c5ee36809aa0f560b4"
 )
+
+object BlockChain {
+  def apply[F[_]](implicit sync: Sync[F]): BlockChain[F] = new BlockChain(Seq(GenesisBlock))
+
+  def apply[F[_]](blocks: Seq[Block])(implicit sync: Sync[F]): F[Try[BlockChain[F]]] = {
+    for {
+      valid <- validChain(blocks)
+    } yield
+      if (valid)
+        Success(new BlockChain(blocks))
+      else
+        Failure(new IllegalArgumentException("Invalid chain specified."))
+  }
+
+  //FIXME: this function is not tail-recursive
+  private def validChain[F[_]](chain: Seq[Block])(implicit F: Sync[F]): F[Boolean] = {
+    chain match {
+      case singleBlock :: Nil
+        if singleBlock == GenesisBlock => F.delay(true)
+      case head :: beforeHead :: tail => for {
+        vb <- validBlock(head, beforeHead)
+        res <- if (vb) validChain(beforeHead :: tail) else F.delay(false)
+      } yield res
+      case _ => F.delay(false)
+    }
+  }
+
+  private def validBlock[F[_]](newBlock: Block, previousBlock: Block)(implicit F: Sync[F]): F[Boolean] = {
+    for {
+      hash <- calculateHashForBlock(newBlock)
+    } yield
+      previousBlock.index + 1 == newBlock.index &&
+        previousBlock.hash == newBlock.previousHash &&
+        hash == newBlock.hash
+  }
+
+  private def calculateHashForBlock[F[_]](block: Block)(implicit F: Sync[F]): F[String] = calculateHash(block.index, block.previousHash, block.timestamp, block.data)
+
+
+  private def hash[F[_]](data: String)(implicit F: Sync[F]): F[String] = for {
+    hash <- SHA256.hash[F](data.utf8Bytes)
+  } yield hash.toHexString
+
+  private def calculateHash[F[_]](index: Int, previousHash: String, timestamp: Long, data: String)(implicit F: Sync[F]): F[String] =
+    hash(s"$index:$previousHash:$timestamp:$data")
+}
+
+
+case class BlockChain[F[_] : Sync] private(blocks: Seq[Block]) extends BaseBlockChain[F] {
+  def addBlock(data: String): F[BlockChain[F]] = {
+    for {
+      next <- generateNextBlock(data)
+    } yield new BlockChain(next +: blocks)
+  }
+
+  def addBlock(block: Block): F[Try[BlockChain[F]]] = for {
+    v <- validBlock(block)
+  } yield
+    if (v)
+      Success(new BlockChain(block +: blocks))
+    else
+      Failure(new IllegalArgumentException("Invalid block added"))
+
+  def firstBlock: Block = blocks.last
+
+  def latestBlock: Block = blocks.head
+
+  private def generateNextBlock(data: String): F[Block] = {
+    val previousBlock = latestBlock
+    val nextIndex     = previousBlock.index + 1
+    val nextTimestamp = new Date().getTime() / 1000 //Fixme: use java.time.LocalDateTime
+    for {
+      nextHash <- BlockChain.calculateHash(nextIndex, previousBlock.hash, nextTimestamp, data)
+    } yield
+      Block(nextIndex, previousBlock.hash, nextTimestamp, data, nextHash)
+  }
+
+  private def validBlock(data: Block): F[Boolean] = BlockChain.validBlock(data, latestBlock)
+}
 

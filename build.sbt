@@ -12,5 +12,9 @@ libraryDependencies += "dev.zio" %% "zio" % "1.0.0-RC17"
 val tsecV = "0.0.1-M11"
 libraryDependencies ++= Seq(
   "io.github.jmcardon" %% "tsec-hash-jca" % tsecV,
-  "io.github.jmcardon" %% "tsec-hash-bouncy" % tsecV
+  "io.github.jmcardon" %% "tsec-hash-bouncy" % tsecV,
+  "com.roundeights" %% "hasher" % "1.2.0",
 )
+
+libraryDependencies += "io.monix" %% "monix" % "3.1.0"
+libraryDependencies += "io.monix" %% "monix-eval" % "3.1.0"
