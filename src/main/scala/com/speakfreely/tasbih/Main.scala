@@ -1,25 +1,33 @@
 package com.speakfreely.tasbih
 
+import java.io.IOException
 import java.util.Date
 
-import cats.effect.{ExitCode, Sync}
+import cats.effect.Sync
 import cats.implicits._
-import monix.eval.{Task, TaskApp}
 import tsec.common._
 import tsec.hashing.jca._
+import zio.ZIO
+import zio.console._
+import zio.interop.catz._
 
 import scala.language.higherKinds
 import scala.util.{Failure, Success, Try}
 
-object Main extends TaskApp {
-  override def run(args: List[String]): Task[ExitCode] = {
-    val b = BlockChain[Task]
+object Main extends CatsApp {
+
+  override def run(args: List[String]): ZIO[Console, Nothing, Int] =
+    myAppLogic.fold(_ => 1, _ => 0)
+
+  type TaskA[+A] = ZIO[Any, Throwable, A]
+  val myAppLogic: ZIO[Any, Throwable, Unit] = {
+    val b: BlockChain[TaskA] = BlockChain[TaskA]
     for {
       b1 <- b.addBlock("Hello")
       b2 <- b1.addBlock("Block")
       b3 <- b2.addBlock("Chain!")
-      _ <- Task(println(b3))
-    } yield ExitCode.Success
+      _ <- ZIO.apply(println(b3))
+    } yield ()
   }
 }
 
