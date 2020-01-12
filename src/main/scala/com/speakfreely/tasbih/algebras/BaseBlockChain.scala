@@ -14,6 +14,10 @@ trait BaseBlockChain[F[_]] {
 
 }
 
+object BaseBlockChain {
+  def apply[F[_]](implicit F: BaseBlockChain[F]): BaseBlockChain[F] = F
+}
+
 case class Block(index: Int,
                  previousHash: String,
                  timestamp: Long,
