@@ -4,7 +4,8 @@ import java.util.Date
 
 import cats.effect.Sync
 import cats.implicits._
-import com.speakfreely.tasbih.algebras.{BaseBlockChain, Block, GenesisBlock}
+import com.speakfreely.models.{Block, GenesisBlock}
+import com.speakfreely.tasbih.algebras.BaseBlockChain
 import tsec.common._
 import tsec.hashing.jca._
 
